@@ -127,18 +127,22 @@ func (g *VisionGraph) buildMessages(ctx context.Context, input *VisionInput) ([]
 	return messages, nil
 }
 
-// buildVisionContent 构建百炼多模态 content： [{"text":"..."},{"image":"data:image/png;base64,..."}]
+// buildVisionContent 构建百炼多模态 content： [{"text":"用户问：xx【用中文回答】"},{"image":"..."}]
 func buildVisionContent(text, frameB64 string) string {
 	var sb strings.Builder
 	sb.WriteString("[{\"text\":")
-	sb.WriteString(jsonStr(text))
-	if frameB64 != "" {
-		sb.WriteString("},{\"image\":\"data:image/png;base64,")
-		sb.WriteString(frameB64)
-		sb.WriteString("\"}]")
+	if text == "" {
+		sb.WriteString(jsonStr("请描述画面内容【用中文回答】"))
 	} else {
-		sb.WriteString("}]")
+		sb.WriteString(jsonStr(text + "【用中文回答】"))
 	}
+	sb.WriteString("}")
+	if frameB64 != "" {
+		sb.WriteString(",{\"image\":\"data:image/png;base64,")
+		sb.WriteString(frameB64)
+		sb.WriteString("\"}")
+	}
+	sb.WriteString("]")
 	return sb.String()
 }
 

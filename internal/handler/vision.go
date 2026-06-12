@@ -115,13 +115,15 @@ func (h *VisionHandler) HandleVision(c *gin.Context) {
 			continue
 		}
 
+		h.logger.Debug("ws msg received", zap.String("type", req.Type), zap.String("session", sessionID))
+
 		// 心跳
 		if req.Type == model.VisionMsgPing {
 			h.writeResponse(conn, model.VisionResponse{Type: model.VisionMsgPong, SessionID: sessionID})
 			continue
 		}
 
-		// 帧处理：采样 → 推理
+		// 帧处理：采样 → 仅保存，不推理
 		if req.Type == model.VisionMsgFrame {
 			shouldSample, compressedFrame, err := h.sampler.ShouldSample(req.Frame)
 			if err != nil {
@@ -131,14 +133,15 @@ func (h *VisionHandler) HandleVision(c *gin.Context) {
 			if !shouldSample {
 				continue
 			}
-
-			go h.doInference(ctx, conn, sessionID, compressedFrame, req.Transcript)
+			h.svc.SetLatestFrame(sessionID, compressedFrame)
 			continue
 		}
 
-		// 纯文字输入（无帧）
+		// 语音输入：携带最新帧推理
 		if req.Type == model.VisionMsgTranscript && req.Transcript != "" {
-			go h.doInference(ctx, conn, sessionID, "", req.Transcript)
+			frameB64 := h.svc.GetLatestFrame(sessionID)
+			h.logger.Info("trigger inference", zap.String("transcript", req.Transcript), zap.Bool("hasFrame", frameB64 != ""))
+			go h.doInference(ctx, conn, sessionID, frameB64, req.Transcript)
 		}
 	}
 
@@ -147,6 +150,7 @@ func (h *VisionHandler) HandleVision(c *gin.Context) {
 
 // doInference 执行多模态推理并发送回复。
 func (h *VisionHandler) doInference(ctx context.Context, conn *websocket.Conn, sessionID, frameB64, transcript string) {
+	h.logger.Info("inference start", zap.String("session", sessionID), zap.String("transcript", transcript))
 	result, err := h.svc.ProcessFrame(ctx, sessionID, frameB64, transcript)
 	if err != nil {
 		h.logger.Error("vision inference failed", zap.String("session", sessionID), zap.Error(err))

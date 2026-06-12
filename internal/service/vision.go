@@ -19,9 +19,10 @@ type VisionService struct {
 	visionGraph *graph.VisionGraph
 	logger      *zap.Logger
 
-	mu       sync.RWMutex
-	sessions map[string]*graph.VisionInput // sessionID → 最新输入（含历史）
-	cfg      *config.VisionConfig
+	mu          sync.RWMutex
+	sessions    map[string]*graph.VisionInput // sessionID → 最新输入（含历史）
+	latestFrame map[string]string             // sessionID → 最新帧 Base64
+	cfg         *config.VisionConfig
 }
 
 // NewVisionService 创建视觉对话服务。
@@ -30,6 +31,7 @@ func NewVisionService(vg *graph.VisionGraph, cfg *config.VisionConfig, logger *z
 		visionGraph: vg,
 		logger:      logger,
 		sessions:    make(map[string]*graph.VisionInput),
+		latestFrame: make(map[string]string),
 		cfg:         cfg,
 	}
 }
@@ -147,6 +149,20 @@ func (s *VisionService) appendHistory(sessionID, userText, aiText string) {
 	if len(sess.History) > 20 {
 		sess.History = sess.History[len(sess.History)-20:]
 	}
+}
+
+// SetLatestFrame 存储会话最新帧。
+func (s *VisionService) SetLatestFrame(sessionID, frameB64 string) {
+	s.mu.Lock()
+	s.latestFrame[sessionID] = frameB64
+	s.mu.Unlock()
+}
+
+// GetLatestFrame 获取会话最新帧。
+func (s *VisionService) GetLatestFrame(sessionID string) string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.latestFrame[sessionID]
 }
 
 // CloseSession 关闭并清理会话。

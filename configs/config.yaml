@@ -44,7 +44,7 @@ vision:
   detail: "low"           # OpenAI Vision detail: low/high/auto
 
 log:
-  level: "info"
+  level: "debug"
   file_path: "./logs/vision-assistant.log"
   max_size: 100
   max_backups: 7
