@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"encoding/base64"
 	"image"
+	"image/jpeg"
 	_ "image/jpeg"
-	"image/png"
 	"strings"
 	"sync"
 	"time"
@@ -160,10 +160,9 @@ func hammingDistance(a, b uint64) int {
 	return dist
 }
 
-// encodeFrame 将图片编码为 PNG。GPT-4o Vision 支持 PNG，且 Go 标准库 PNG 编码器无 cgo 依赖。
+// encodeFrame 将图片编码为 JPEG（画质 70，Go 标准库纯 Go 实现）。
 func encodeFrame(buf *bytes.Buffer, img image.Image) error {
-	encoder := png.Encoder{CompressionLevel: png.BestSpeed}
-	return encoder.Encode(buf, img)
+	return jpeg.Encode(buf, img, &jpeg.Options{Quality: 70})
 }
 
 // stripDataURI 去掉 "data:image/jpeg;base64," 前缀。

@@ -138,7 +138,7 @@ func buildVisionContent(text, frameB64 string) string {
 	}
 	sb.WriteString("}")
 	if frameB64 != "" {
-		sb.WriteString(",{\"image\":\"data:image/png;base64,")
+		sb.WriteString(",{\"image\":\"data:image/jpeg;base64,")
 		sb.WriteString(frameB64)
 		sb.WriteString("\"}")
 	}
