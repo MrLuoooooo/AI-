@@ -114,14 +114,13 @@ func (m *QianwenModel) buildRequest(input []*schema.Message, stream bool, opts [
 	req.Input.Messages = make([]dsMessage, len(input))
 	for i, msg := range input {
 		dm := dsMessage{Role: string(msg.Role)}
-		// 解析 content 是否为 JSON 数组（多模态格式）
 		content := strings.TrimSpace(msg.Content)
 		if strings.HasPrefix(content, "[") {
+			// 已是百炼格式的 JSON 数组，直接使用
 			dm.Content = json.RawMessage(content)
 		} else {
-			// 纯文本，转为 JSON 字符串
-			textJSON, _ := json.Marshal(content)
-			dm.Content = textJSON
+			// 纯文本 → 包装为百炼格式 [{"text":"内容"}]
+			dm.Content = json.RawMessage(wrapTextContent(content))
 		}
 		req.Input.Messages[i] = dm
 	}
@@ -132,6 +131,21 @@ func (m *QianwenModel) buildRequest(input []*schema.Message, stream bool, opts [
 	req.Parameters.Temperature = 0.5
 
 	return json.Marshal(req)
+}
+
+// wrapTextContent 将纯文本包装为百炼多模态 content 数组格式。
+func wrapTextContent(text string) string {
+	return `[{"text":"` + jsonEscape(text) + `"}]`
+}
+
+// jsonEscape 转义 JSON 字符串中的特殊字符。
+func jsonEscape(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `"`, `\"`)
+	s = strings.ReplaceAll(s, "\n", `\n`)
+	s = strings.ReplaceAll(s, "\r", `\r`)
+	s = strings.ReplaceAll(s, "\t", `\t`)
+	return s
 }
 
 func (m *QianwenModel) doRequest(ctx context.Context, body []byte, streamWriter *schema.StreamWriter[*schema.Message]) (*schema.Message, error) {

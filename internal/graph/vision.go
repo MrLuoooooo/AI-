@@ -100,7 +100,6 @@ func (g *VisionGraph) Prompt() string {
 func (g *VisionGraph) buildMessages(ctx context.Context, input *VisionInput) ([]*schema.Message, error) {
 	g.mu.RLock()
 	prompt := g.prompt
-	detail := g.detail
 	g.mu.RUnlock()
 
 	messages := make([]*schema.Message, 0, len(input.History)+2)
@@ -118,8 +117,8 @@ func (g *VisionGraph) buildMessages(ctx context.Context, input *VisionInput) ([]
 	}
 	messages = append(messages, hist...)
 
-	// 当前用户消息（多模态 JSON content）
-	content := buildVisionContent(input.Transcript, input.FrameB64, detail)
+	// 当前用户消息（百炼多模态格式）
+	content := buildVisionContent(input.Transcript, input.FrameB64)
 	messages = append(messages, &schema.Message{
 		Role:    schema.User,
 		Content: content,
@@ -128,17 +127,15 @@ func (g *VisionGraph) buildMessages(ctx context.Context, input *VisionInput) ([]
 	return messages, nil
 }
 
-// buildVisionContent 构建 OpenAI Vision 多模态 content 数组的 JSON 字符串。
-func buildVisionContent(text, frameB64, detail string) string {
+// buildVisionContent 构建百炼多模态 content： [{"text":"..."},{"image":"data:image/png;base64,..."}]
+func buildVisionContent(text, frameB64 string) string {
 	var sb strings.Builder
-	sb.WriteString("[{\"type\":\"text\",\"text\":")
+	sb.WriteString("[{\"text\":")
 	sb.WriteString(jsonStr(text))
 	if frameB64 != "" {
-		sb.WriteString("},{\"type\":\"image_url\",\"image_url\":{\"url\":\"data:image/png;base64,")
+		sb.WriteString("},{\"image\":\"data:image/png;base64,")
 		sb.WriteString(frameB64)
-		sb.WriteString("\",\"detail\":\"")
-		sb.WriteString(detail)
-		sb.WriteString("\"}}]")
+		sb.WriteString("\"}]")
 	} else {
 		sb.WriteString("}]")
 	}
