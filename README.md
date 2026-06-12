@@ -4,30 +4,38 @@
 
 打开摄像头与麦克风，AI 实时观察画面、识别语音、给予自然回应。
 
-## 技术栈
+## 第三方依赖
 
-| 层 | 技术 |
-|---|------|
-| AI 框架 | [Eino](https://github.com/cloudwego/eino) (字节开源) |
-| 后端 | Go 1.23 + Gin + Fx |
-| 多模态 | 阿里云百炼 qwen-vl-plus |
-| 通信 | WebSocket (帧+语音) |
-| 前端 | 原生 HTML5 + Web Speech API |
-| 部署 | Docker Compose (双容器) |
+| 依赖 | 用途 | 许可证 |
+|------|------|--------|
+| [Eino](https://github.com/cloudwego/eino) v0.8 | AI Agent 图编排框架（字节开源） | Apache 2.0 |
+| [Gin](https://github.com/gin-gonic/gin) v1.10 | HTTP 路由与中间件 | MIT |
+| [Fx](https://github.com/uber-go/fx) v1.20 | 依赖注入框架（Uber） | MIT |
+| [Zap](https://github.com/uber-go/zap) v1.27 | 结构化日志（Uber） | MIT |
+| [Viper](https://github.com/spf13/viper) v1.21 | 配置管理 | MIT |
+| [Gorilla WebSocket](https://github.com/gorilla/websocket) v1.5 | WebSocket 协议 | BSD 2-Clause |
+| [Lumberjack](https://github.com/natefinch/lumberjack) v2.2 | 日志文件轮转 | MIT |
+| [阿里云百炼 DashScope API](https://help.aliyun.com/zh/model-studio/) | 多模态大模型 qwen-vl-plus | 商业 |
 
-## 快速开始
+## 代码复用声明
 
-```bash
-# 1. 配置 API Key
-cp .env.example .env
-# 编辑 .env 填入百炼 API Key
+本项目后端基础设施代码（`internal/config/`、`internal/server/`、`internal/logger/`、`internal/callback/`、`internal/component/openaimodel/`）引用自本人过往项目 [GoAgentPro](https://github.com/MrLuoooooo/MrLuoooooagent.git)，在此基础上进行了以下原创开发：
 
-# 2. 启动
-docker compose up -d
-
-# 3. 打开浏览器
-http://localhost:8080
-```
+| 模块 | 来源 | 说明 |
+|------|------|------|
+| `internal/graph/vision.go` | 原创 | 基于 Eino 框架构建的视觉多模态对话图 |
+| `internal/component/qianwenmodel/` | 原创 | 适配阿里百炼原生 DashScope API 的 ChatModel 实现 |
+| `internal/component/frame/` | 原创 | 自适应帧采样器（时间间隔+帧差哈希+缩放压缩） |
+| `internal/component/vad/` | 原创 | 纯 Go 能量阈值语音端点检测 |
+| `internal/handler/vision.go` | 原创 | WebSocket 实时视觉对话处理器 |
+| `internal/service/vision.go` | 原创 | 会话管理、历史追踪、成本计量 |
+| `internal/model/vision.go` | 原创 | 视觉对话数据模型 |
+| `web/` | 原创 | 前端视觉对话界面（HTML5 + Web Speech API + Canvas） |
+| `internal/config/` | 复用 | 基于 GoAgentPro，新增 VisionConfig 配置段 |
+| `internal/server/` | 复用 | 基于 GoAgentPro，精简为视觉助手专用路由和依赖注入 |
+| `internal/logger/` | 复用 | 基于 GoAgentPro，Zap + Lumberjack 日志方案 |
+| `internal/callback/` | 复用 | 基于 GoAgentPro，Eino 全局回调日志 |
+| `internal/component/openaimodel/` | 复用 | 基于 GoAgentPro，保留以备 OpenAI 兼容模式 |
 
 ## 项目结构
 

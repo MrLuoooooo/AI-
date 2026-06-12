@@ -1,6 +1,8 @@
 package server
 
 import (
+	"os"
+
 	"ai-vision-assistant/internal/callback"
 	"ai-vision-assistant/internal/component/frame"
 	"ai-vision-assistant/internal/component/qianwenmodel"
@@ -39,16 +41,29 @@ func ProvideResolvedConfig(cfg *config.Config, logger *zap.Logger) *ResolvedConf
 	c := cfg.ModelProvider.Cloud
 	cm := c.ChatModel
 	if cm == "" {
+		cm = os.Getenv("LLM_CHAT_MODEL")
+	}
+	if cm == "" {
 		cm = "qwen-vl-plus"
+	}
+	bu := c.BaseURL
+	if bu == "" {
+		bu = os.Getenv("LLM_BASE_URL")
+	}
+	if bu == "" {
+		bu = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 	}
 	ak := c.APIKey
 	if ak == "" {
+		ak = os.Getenv("GOAGENT_MODEL_PROVIDER_CLOUD_API_KEY")
+	}
+	if ak == "" {
 		ak = "sk-placeholder"
 	}
-	logger.Info("model resolved", zap.String("chat_model", cm))
+	logger.Info("model resolved", zap.String("chat_model", cm), zap.String("base_url", bu))
 	return &ResolvedConfig{
 		ChatModel: cm,
-		BaseURL:   c.BaseURL,
+		BaseURL:   bu,
 		APIKey:    ak,
 		Provider:  "cloud/" + c.Type,
 	}
