@@ -14,12 +14,15 @@
 | [Zap](https://github.com/uber-go/zap) v1.27 | 结构化日志（Uber） | MIT |
 | [Viper](https://github.com/spf13/viper) v1.21 | 配置管理 | MIT |
 | [Gorilla WebSocket](https://github.com/gorilla/websocket) v1.5 | WebSocket 协议 | BSD 2-Clause |
+| [golang.org/x/image](https://pkg.go.dev/golang.org/x/image) v0.21 | 图片缩放（CatmullRom） | BSD 3-Clause |
+| [Google UUID](https://github.com/google/uuid) v1.6 | 会话 ID 生成 | BSD 3-Clause |
 | [Lumberjack](https://github.com/natefinch/lumberjack) v2.2 | 日志文件轮转 | MIT |
-| [阿里云百炼 DashScope API](https://help.aliyun.com/zh/model-studio/) | 多模态大模型 qwen-vl-plus | 商业 |
+| [阿里云百炼 DashScope API](https://help.aliyun.com/zh/model-studio/) | 多模态大模型 qwen-vl-max | 商业 |
 
 ## 代码复用声明
 
-本项目后端基础设施代码（`internal/config/`、`internal/server/`、`internal/logger/`、`internal/callback/`、`internal/component/openaimodel/`）引用自本人过往项目 [GoAgentPro](https://github.com/MrLuoooooo/MrLuoooooagent.git)，在此基础上进行了以下原创开发：
+本项目复用了个人此前开发的 Agent 对话系统 [GoAgentPro](https://github.com/MrLuoooooo/MrLuoooooagent.git) 中的基础设施模块（配置、日志、HTTP 服务框架），在此基础上完成了视觉多模态对话的原创开发：
+仓库在"https://github.com/MrLuoooooo/MrLuoooooagent.git", 实为本人项目
 
 | 模块 | 来源 | 说明 |
 |------|------|------|
