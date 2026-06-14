@@ -200,7 +200,7 @@ body{
 
 <script>
 const WS_URL = 'ws://' + location.host + '/api/v1/ws/vision';
-let ws = null, stream = null, audioTrack = null, recognition = null, isRunning = false;
+let ws = null, stream = null, recognition = null, isRunning = false;
 let frameTimer = null, sessionId = '';
 let ttsCooldown = false, ttsCooldownTimer = null;
 
@@ -306,27 +306,81 @@ function connectWS() {
   });
 }
 
-// ---- 语音识别 ----
-function startRecognition() {
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) { micLabel.textContent='浏览器不支持'; return null; }
+// ---- 语音识别（由 createRecognition 统一创建） ----
 
+// ---- TTS ----
+let ttsQueue = [];
+let ttsSpeaking = false;
+function speak(text) {
+  if (!('speechSynthesis' in window)) return;
+  ttsQueue.push(text);
+  if (!ttsSpeaking) processTTS();
+}
+function processTTS() {
+  if (ttsQueue.length === 0) {
+    ttsSpeaking = false;
+    // TTS 播完，800ms 冷却后重新建 SR 实例
+    ttsCooldown = true;
+    clearTimeout(ttsCooldownTimer);
+    ttsCooldownTimer = setTimeout(() => {
+      ttsCooldown = false;
+      if (isRunning) {
+        createRecognition();
+      }
+      setWaveState('active');
+      micLabel.textContent = '监听中';
+    }, 800);
+    return;
+  }
+  ttsSpeaking = true;
+  // TTS 开播时直接销毁 SR，不让它吃 TTS 音频
+  destroyRecognition();
+  setWaveState('idle');
+  micLabel.textContent = 'AI回复中...';
+
+  const text = ttsQueue.shift();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'zh-CN';
+  u.rate = 1.15;
+  u.onend = () => { ttsSpeaking = false; processTTS(); };
+  u.onerror = () => { ttsSpeaking = false; processTTS(); };
+  speechSynthesis.speak(u);
+}
+
+function destroyRecognition() {
+  if (!recognition) return;
+  // 清掉所有回调，防止 abort 触发的 onend 副作用
+  recognition.onresult = null;
+  recognition.onspeechstart = null;
+  recognition.onspeechend = null;
+  recognition.onstart = null;
+  recognition.onend = null;
+  recognition.onerror = null;
+  try { recognition.abort(); } catch(e) { console.log('SR abort:', e); }
+  recognition = null;
+}
+
+function createRecognition() {
+  if (recognition) return; // 已有实例则复用
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { micLabel.textContent='浏览器不支持'; return; }
   const rec = new SR();
   rec.lang = 'zh-CN';
-  rec.continuous = true;     // 持续监听
-  rec.interimResults = true; // 实时文字 -- 关键：提升流畅度
+  rec.continuous = true;
+  rec.interimResults = true;
   rec.maxAlternatives = 1;
 
   let finalText = '';
   rec.onresult = (e) => {
     console.log('SR result, length:', e.results.length, 'isFinal:', e.results[e.results.length-1].isFinal);
+    if (ttsSpeaking || ttsCooldown) return; // 播放中或冷却中，丢弃
     let interim = '';
     for (let i = e.resultIndex; i < e.results.length; i++) {
       const r = e.results[i];
       if (r.isFinal) {
         finalText += r[0].transcript;
         finalText = finalText.trim();
-        if (finalText && ws && ws.readyState === WebSocket.OPEN && !ttsCooldown) {
+        if (finalText && ws && ws.readyState === WebSocket.OPEN) {
           addMsg('user', finalText);
           setHint('thinking');
           ws.send(JSON.stringify({type:'transcript',transcript:finalText,session_id:sessionId}));
@@ -340,52 +394,13 @@ function startRecognition() {
     if (display.trim()) showCaption(display.trim());
     if (interim) { setHint('listening'); setWaveState('speaking'); }
   };
-  rec.onspeechstart = () => { console.log('SR start'); setWaveState('speaking'); micLabel.textContent='说话中'; };
-  rec.onspeechend = () => { console.log('SR end'); setWaveState('active'); micLabel.textContent='监听中'; };
-  rec.onstart = () => { console.log('SR onstart'); setWaveState('active'); micLabel.textContent='监听中'; };
-  rec.onend = () => { console.log('SR onend'); setWaveState('active'); micLabel.textContent='监听中'; };
-  rec.onerror = (e) => {
-    console.log('SR error:', e.error, e.message);
-  };
+  rec.onspeechstart = () => { if (ttsSpeaking||ttsCooldown) return; setWaveState('speaking'); micLabel.textContent='说话中'; };
+  rec.onspeechend = () => { if (ttsSpeaking||ttsCooldown) return; setWaveState('active'); micLabel.textContent='监听中'; };
+  rec.onstart = () => { setWaveState('active'); micLabel.textContent='监听中'; };
+  rec.onend = () => { console.log('SR onend'); };
+  rec.onerror = (e) => { console.log('SR error:', e.error, e.message); };
   rec.start();
-  return rec;
-}
-
-// ---- TTS ----
-let ttsQueue = [];
-let ttsSpeaking = false;
-function speak(text) {
-  if (!('speechSynthesis' in window)) return;
-  ttsQueue.push(text);
-  if (!ttsSpeaking) processTTS();
-}
-function processTTS() {
-  if (ttsQueue.length === 0) {
-    ttsSpeaking = false;
-    // TTS 播完，等 1.5s 冷却后重新开麦
-    ttsCooldown = true;
-    clearTimeout(ttsCooldownTimer);
-    ttsCooldownTimer = setTimeout(() => {
-      ttsCooldown = false;
-      if (audioTrack) audioTrack.enabled = true;
-      setWaveState('active');
-      micLabel.textContent = '监听中';
-    }, 1500);
-    return;
-  }
-  ttsSpeaking = true;
-  // 开始播 TTS 时关麦 —— 物理切断，不走 stop/start
-  if (audioTrack) audioTrack.enabled = false;
-  setWaveState('idle');
-  micLabel.textContent = 'AI回复中...';
-
-  const text = ttsQueue.shift();
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = 'zh-CN';
-  u.rate = 1.15;
-  u.onend = () => { ttsSpeaking = false; processTTS(); };
-  u.onerror = () => { ttsSpeaking = false; processTTS(); };
-  speechSynthesis.speak(u);
+  recognition = rec;
 }
 // ---- 帧发送 ----
 function sendFrame() {
@@ -413,7 +428,7 @@ async function toggle() {
     isRunning = true; updateButton();
     await connectWS();
     await startMedia();
-    recognition = startRecognition();
+    recognition = createRecognition();
     frameTimer = setInterval(sendFrame, 1000);
     setHint('listening');
     micLabel.textContent = '监听中';
@@ -428,7 +443,6 @@ async function startMedia() {
     video:{width:640,height:480,facingMode:'user'},
     audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}
   });
-  audioTrack = stream.getAudioTracks()[0] || null;
   video.srcObject = stream;
   await video.play();
 }
@@ -436,7 +450,7 @@ async function startMedia() {
 function stop() {
   isRunning = false; updateButton();
   clearInterval(frameTimer); frameTimer = null;
-  if (recognition) { try{recognition.stop()}catch(e){}; recognition=null; }
+  destroyRecognition();
   speechSynthesis.cancel(); ttsQueue=[]; ttsSpeaking=false; ttsCooldown=false;
   clearTimeout(ttsCooldownTimer); ttsCooldownTimer=null;
   if (stream) { stream.getTracks().forEach(t=>t.stop()); stream=null; }

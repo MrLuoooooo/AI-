@@ -12,7 +12,7 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /build/vision-assistant ./cmd/server
 
 # ---- 运行阶段 ----
-FROM alpine:3.21
+FROM alpine:latest
 
 RUN apk add --no-cache ca-certificates tzdata curl
 
