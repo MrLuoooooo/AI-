@@ -1,6 +1,6 @@
 package model
 
-// APIEnvelope is the standard JSON response wrapper used by all endpoints.
+// APIEnvelope HTTP API 通用响应外壳。
 type APIEnvelope struct {
 	Code    int         `json:"code"`
 	Message string      `json:"message"`

@@ -14,7 +14,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// VisionService 视觉对话会话管理与编排。
+// VisionService 管会话生命周期 + 存帧 + 调图推理。
 type VisionService struct {
 	visionGraph *graph.VisionGraph
 	logger      *zap.Logger
@@ -25,7 +25,7 @@ type VisionService struct {
 	cfg         *config.VisionConfig
 }
 
-// NewVisionService 创建视觉对话服务。
+// NewVisionService 建视觉对话服务。
 func NewVisionService(vg *graph.VisionGraph, cfg *config.VisionConfig, logger *zap.Logger) *VisionService {
 	return &VisionService{
 		visionGraph: vg,
@@ -36,7 +36,7 @@ func NewVisionService(vg *graph.VisionGraph, cfg *config.VisionConfig, logger *z
 	}
 }
 
-// CreateSession 创建新会话，返回会话 ID。
+// CreateSession 新会话 UUID，初始化历史。
 func (s *VisionService) CreateSession() string {
 	id := uuid.New().String()
 	s.mu.Lock()
@@ -46,7 +46,7 @@ func (s *VisionService) CreateSession() string {
 	return id
 }
 
-// CheckLimit 检查是否达到最大会话数。
+// CheckLimit 会话数上限检查。
 func (s *VisionService) CheckLimit() error {
 	s.mu.RLock()
 	count := len(s.sessions)
@@ -61,8 +61,7 @@ func (s *VisionService) CheckLimit() error {
 	return nil
 }
 
-// ProcessFrame 处理一帧画面 + 可选的语音文字。
-// 返回 AI 的文本回复。
+// ProcessFrame 拼帧+文字→送 Eino 图推理→回结果→记历史。
 func (s *VisionService) ProcessFrame(ctx context.Context, sessionID, frameB64, transcript string) (*schema.Message, error) {
 	s.mu.Lock()
 	sess, ok := s.sessions[sessionID]
@@ -90,8 +89,7 @@ func (s *VisionService) ProcessFrame(ctx context.Context, sessionID, frameB64, t
 	return result, nil
 }
 
-// ProcessFrameStream 流式处理，返回 Eino StreamReader。
-// 流结束后自动更新会话历史（与 ProcessFrame 行为一致）。
+// ProcessFrameStream 同 ProcessFrame，流式返回。流结束后记历史。
 func (s *VisionService) ProcessFrameStream(ctx context.Context, sessionID, frameB64, transcript string) (*schema.StreamReader[*schema.Message], error) {
 	s.mu.Lock()
 	sess, ok := s.sessions[sessionID]
@@ -132,7 +130,7 @@ func (s *VisionService) ProcessFrameStream(ctx context.Context, sessionID, frame
 	return pr, nil
 }
 
-// appendHistory 追加用户消息和 AI 回复到会话历史。
+// appendHistory 存用户消息+AI回复，最多保留 20 条。
 func (s *VisionService) appendHistory(sessionID, userText, aiText string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -151,7 +149,7 @@ func (s *VisionService) appendHistory(sessionID, userText, aiText string) {
 	}
 }
 
-// SetLatestFrame 存储会话最新帧。
+// SetLatestFrame 存会话最新帧 Base64。
 func (s *VisionService) SetLatestFrame(sessionID, frameB64 string) {
 	s.mu.Lock()
 	s.latestFrame[sessionID] = frameB64
@@ -165,7 +163,7 @@ func (s *VisionService) GetLatestFrame(sessionID string) string {
 	return s.latestFrame[sessionID]
 }
 
-// CloseSession 关闭并清理会话。
+// CloseSession 清理会话，删历史+帧。
 func (s *VisionService) CloseSession(sessionID string) {
 	s.mu.Lock()
 	delete(s.sessions, sessionID)
@@ -173,7 +171,7 @@ func (s *VisionService) CloseSession(sessionID string) {
 	s.logger.Debug("vision session closed", zap.String("session_id", sessionID))
 }
 
-// SessionCount 返回当前活跃会话数。
+// SessionCount 当前活跃会话数。
 func (s *VisionService) SessionCount() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -182,7 +180,7 @@ func (s *VisionService) SessionCount() int {
 
 // ── 成本控制（设计文档用） ──
 
-// CostTracker 追踪单会话的 token 消耗。
+// CostTracker 单会话 token 累计。
 type CostTracker struct {
 	mu        sync.Mutex
 	sessionID string
@@ -190,7 +188,7 @@ type CostTracker struct {
 	startedAt time.Time
 }
 
-// NewCostTracker 创建成本追踪器。
+// NewCostTracker 建成本追踪器。
 func NewCostTracker(sessionID string) *CostTracker {
 	return &CostTracker{
 		sessionID: sessionID,

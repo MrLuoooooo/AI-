@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// Status 是 VAD 检测结果。
+// Status VAD 检测结果。
 type Status int
 
 const (
@@ -15,14 +15,14 @@ const (
 	SpeechEnd // 检测到语音结束
 )
 
-// State 是当前 VAD 的累计状态。
+// State VAD 上下文：当前状态 + 连续帧计数。
 type State struct {
 	Status       Status
 	SilenceFrames int // 连续静默帧数
 	SpeechFrames  int // 连续语音帧数
 }
 
-// energyVAD 用能量阈值做端点检测 —— 纯 Go、无外部依赖。
+// energyVAD 能量阈值端点检测，纯 Go 无外部依赖。
 type energyVAD struct {
 	mu         sync.Mutex
 	state      State
@@ -32,11 +32,9 @@ type energyVAD struct {
 	enabled    bool
 }
 
-// NewEnergyVAD 创建一个基于能量阈值的 VAD。
-// 参数：
-//   mode: 0-3，越大越激进（阈值越高）
-//   frameMS: VAD 帧长度（毫秒），默认 30
-//   silenceMS: 连续静默多久判定为语音结束，默认 800
+// NewEnergyVAD 建一个 VAD。
+// mode 0-3，越大阈值越高（越不容易触发语音）。
+// frameMS 每帧毫秒数，silenceMS 连续静默多久算结束。
 func NewEnergyVAD(mode, frameMS, silenceMS int) *energyVAD {
 	if frameMS <= 0 {
 		frameMS = 30
@@ -60,8 +58,7 @@ func NewEnergyVAD(mode, frameMS, silenceMS int) *energyVAD {
 	}
 }
 
-// Process 处理一帧 PCM 16-bit 样本数据，返回当前 VAD 状态。
-// pcm 是 int16 样本数组。
+// Process 喂一帧 PCM int16 样本，返回当前状态。
 func (v *energyVAD) Process(pcm []int16) State {
 	v.mu.Lock()
 	defer v.mu.Unlock()
@@ -96,7 +93,7 @@ func (v *energyVAD) Process(pcm []int16) State {
 	return v.state
 }
 
-// computeEnergy 算 PCM 帧的归一化能量。
+// computeEnergy PCM 归一化能量 0-1。
 func computeEnergy(pcm []int16) float64 {
 	if len(pcm) == 0 {
 		return 0

@@ -16,7 +16,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// QianwenModel 阿里云百炼多模态模型，直接调用 DashScope multimodal-generation 端点。
+// QianwenModel 调百炼 DashScope multimodal-generation，实现 eino ChatModel 接口。
 type QianwenModel struct {
 	apiKey  string
 	model   string

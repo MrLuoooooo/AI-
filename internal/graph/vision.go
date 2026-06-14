@@ -13,16 +13,14 @@ import (
 	"github.com/cloudwego/eino/schema"
 )
 
-// VisionInput Eino 图的输入结构。
-// 用户传入的文本（ASR 识别结果）和视觉帧（Base64 PNG）。
+// VisionInput 用户输入：语音文字+当前帧+历史消息。
 type VisionInput struct {
-	Transcript string            // 用户语音转的文字
-	FrameB64   string            // 当前帧 Base64
+	Transcript string            // ASR 文字
+	FrameB64   string            // 当前帧 Base64 JPEG
 	History    []*schema.Message // 历史对话
 }
 
-// VisionGraph 封装 Eino 视觉对话图。
-// 节点：Lambda（消息组装） → ChatModel（多模态推理）
+// VisionGraph Eino 双节点图：build_messages → vision_model。
 type VisionGraph struct {
 	graph  compose.Runnable[*VisionInput, *schema.Message]
 	prompt string
@@ -30,7 +28,7 @@ type VisionGraph struct {
 	mu     sync.RWMutex
 }
 
-// NewVisionGraph 构建视觉对话 Eino 图。
+// NewVisionGraph 编译 Eino 图：build_messages 拼多模态输入 → vision_model 推理。
 func NewVisionGraph(cm model.ChatModel, cfg *config.VisionConfig) (*VisionGraph, error) {
 	prompt := cfg.SystemPrompt
 	if prompt == "" {
@@ -72,17 +70,17 @@ func NewVisionGraph(cm model.ChatModel, cfg *config.VisionConfig) (*VisionGraph,
 	return vg, nil
 }
 
-// Invoke 非流式调用。
+// Invoke 跑一次图，返回 AI 回复。
 func (g *VisionGraph) Invoke(ctx context.Context, input *VisionInput) (*schema.Message, error) {
 	return g.graph.Invoke(ctx, input)
 }
 
-// Stream 流式调用。
+// Stream 流式跑图。
 func (g *VisionGraph) Stream(ctx context.Context, input *VisionInput) (*schema.StreamReader[*schema.Message], error) {
 	return g.graph.Stream(ctx, input)
 }
 
-// UpdatePrompt 热更新系统提示词。
+// UpdatePrompt 运行时换系统提示词。
 func (g *VisionGraph) UpdatePrompt(prompt string) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -96,7 +94,7 @@ func (g *VisionGraph) Prompt() string {
 	return g.prompt
 }
 
-// buildMessages 组装 [SystemPrompt, UserMultimodalMessage].
+// buildMessages 拼 [SystemPrompt, History..., UserMultimodalMessage]。
 func (g *VisionGraph) buildMessages(ctx context.Context, input *VisionInput) ([]*schema.Message, error) {
 	g.mu.RLock()
 	prompt := g.prompt

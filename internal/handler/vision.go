@@ -22,7 +22,7 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin:     func(r *http.Request) bool { return true },
 }
 
-// VisionHandler 处理 WebSocket 视觉对话连接。
+// VisionHandler WebSocket 连接入口，收帧、收文字、调模型、回结果。
 type VisionHandler struct {
 	svc     *service.VisionService
 	sampler *frame.Sampler
@@ -39,7 +39,7 @@ func NewVisionHandler(svc *service.VisionService, sampler *frame.Sampler, logger
 	}
 }
 
-// HandleVision 处理 WebSocket 升级并进入视觉对话循环。
+// HandleVision WebSocket 升级后进入消息循环，分帧/文字/心跳处理。
 func (h *VisionHandler) HandleVision(c *gin.Context) {
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
@@ -94,7 +94,7 @@ func (h *VisionHandler) HandleVision(c *gin.Context) {
 
 	ctx := c.Request.Context()
 
-	// 主循环：收帧 → 采样 → 多模态推理 → 回复
+	// 消息循环：帧只采样+保存，文字来了才调模型
 	for {
 		msgType, rawMsg, err := conn.ReadMessage()
 		if err != nil {
@@ -148,7 +148,7 @@ func (h *VisionHandler) HandleVision(c *gin.Context) {
 	h.logger.Info("vision ws disconnected", zap.String("session", sessionID))
 }
 
-// doInference 执行多模态推理并发送回复。
+// doInference 调模型跑多模态推理，结果直接写回 WebSocket。
 func (h *VisionHandler) doInference(ctx context.Context, conn *websocket.Conn, sessionID, frameB64, transcript string) {
 	h.logger.Info("inference start", zap.String("session", sessionID), zap.String("transcript", transcript))
 	result, err := h.svc.ProcessFrame(ctx, sessionID, frameB64, transcript)
@@ -171,7 +171,7 @@ func (h *VisionHandler) doInference(ctx context.Context, conn *websocket.Conn, s
 	}
 }
 
-// writeResponse 写 JSON 响应到 WebSocket。
+// writeResponse JSON 编码后写回 WebSocket。
 func (h *VisionHandler) writeResponse(conn *websocket.Conn, resp model.VisionResponse) {
 	conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 	data, err := json.Marshal(resp)
@@ -184,7 +184,7 @@ func (h *VisionHandler) writeResponse(conn *websocket.Conn, resp model.VisionRes
 	}
 }
 
-// ActiveSessions 返回当前活跃 WebSocket 连接数。
+// ActiveSessions 当前 WebSocket 连接数。
 func (h *VisionHandler) ActiveSessions() int64 {
 	return atomic.LoadInt64(&h.sessionCount)
 }

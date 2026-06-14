@@ -8,13 +8,12 @@ import (
 	"go.uber.org/zap"
 )
 
-// LoggingCallback 监听每个 Eino 组件的开始/结束/错误，统一打日志。
-// 通过 callbacks.AppendGlobalHandlers 全局注册。
+// LoggingCallback Eino 全局回调：开始/结束/报错时打日志。
 type LoggingCallback struct {
 	logger *zap.Logger
 }
 
-// NewLoggingCallback 建一个全局日志回调，启动时注册。
+// NewLoggingCallback 建日志回调，启动时注册到 Eino 全局。
 func NewLoggingCallback(logger *zap.Logger) callbacks.Handler {
 	return callbacks.NewHandlerBuilder().
 		OnStartFn(func(ctx context.Context, info *callbacks.RunInfo, input callbacks.CallbackInput) context.Context {

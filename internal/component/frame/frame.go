@@ -13,7 +13,7 @@ import (
 	"golang.org/x/image/draw"
 )
 
-// Sampler 自适应帧采样器 —— 帧差法降频 + 等比缩放 + JPEG 质量压缩。
+// Sampler 帧采样：时间间隔 + 感知哈希去重 + 缩放压缩。
 type Sampler struct {
 	mu           sync.Mutex
 	lastFrame    *processedFrame // 上一帧缓存
@@ -30,7 +30,7 @@ type processedFrame struct {
 	height  int
 }
 
-// NewSampler 创建一个自适应帧采样器。
+// NewSampler 建帧采样器。intervalMs 最小间隔（ms），quality JPEG质量（1-100），maxWidth 缩放最大宽。
 func NewSampler(intervalMs, quality, maxWidth int) *Sampler {
 	if intervalMs <= 0 {
 		intervalMs = 1000

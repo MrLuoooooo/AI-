@@ -10,8 +10,7 @@ type VisionSession struct {
 	TokenUsed     int64  `json:"token_used"`       // 累计 token 消耗
 }
 
-// VisionRequest WebSocket 客户端发来的消息。
-// 同一消息中 frame 和 transcript 二选一（或同时都有）。
+// VisionRequest 客户端 WebSocket 发来的消息。
 type VisionRequest struct {
 	Type       string `json:"type"`       // "frame" | "transcript" | "ping"
 	Frame      string `json:"frame"`      // Base64 编码的 JPEG 帧

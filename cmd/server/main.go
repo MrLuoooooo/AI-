@@ -1,6 +1,6 @@
 // @title           AI Vision Assistant
 // @version         1.0.0
-// @description     AI 视觉对话助手 —— 打开摄像头与麦克风，AI 看画面、听语音、给回应
+// @description     摄像头 + 麦克风 = AI 视觉对话
 // @host            localhost:8080
 // @BasePath        /api/v1
 package main
