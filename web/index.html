@@ -200,8 +200,9 @@ body{
 
 <script>
 const WS_URL = 'ws://' + location.host + '/api/v1/ws/vision';
-let ws = null, stream = null, recognition = null, isRunning = false;
+let ws = null, stream = null, audioTrack = null, recognition = null, isRunning = false;
 let frameTimer = null, sessionId = '';
+let ttsCooldown = false, ttsCooldownTimer = null;
 
 const video = document.getElementById('video');
 const canvas = document.getElementById('canvas');
@@ -325,7 +326,7 @@ function startRecognition() {
       if (r.isFinal) {
         finalText += r[0].transcript;
         finalText = finalText.trim();
-        if (finalText && ws && ws.readyState === WebSocket.OPEN) {
+        if (finalText && ws && ws.readyState === WebSocket.OPEN && !ttsCooldown) {
           addMsg('user', finalText);
           setHint('thinking');
           ws.send(JSON.stringify({type:'transcript',transcript:finalText,session_id:sessionId}));
@@ -359,8 +360,25 @@ function speak(text) {
   if (!ttsSpeaking) processTTS();
 }
 function processTTS() {
-  if (ttsQueue.length === 0) { ttsSpeaking = false; return; }
+  if (ttsQueue.length === 0) {
+    ttsSpeaking = false;
+    // TTS 播完，等 1.5s 冷却后重新开麦
+    ttsCooldown = true;
+    clearTimeout(ttsCooldownTimer);
+    ttsCooldownTimer = setTimeout(() => {
+      ttsCooldown = false;
+      if (audioTrack) audioTrack.enabled = true;
+      setWaveState('active');
+      micLabel.textContent = '监听中';
+    }, 1500);
+    return;
+  }
   ttsSpeaking = true;
+  // 开始播 TTS 时关麦 —— 物理切断，不走 stop/start
+  if (audioTrack) audioTrack.enabled = false;
+  setWaveState('idle');
+  micLabel.textContent = 'AI回复中...';
+
   const text = ttsQueue.shift();
   const u = new SpeechSynthesisUtterance(text);
   u.lang = 'zh-CN';
@@ -369,47 +387,6 @@ function processTTS() {
   u.onerror = () => { ttsSpeaking = false; processTTS(); };
   speechSynthesis.speak(u);
 }
-function pauseRecognition() {
-  if (recognition) {
-    try { recognition.stop(); } catch(e){}
-  }
-}
-function resumeRecognition() {
-  if (!isRunning) return;
-  try {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) return;
-    recognition = new SR();
-    recognition.lang = 'zh-CN';
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.onresult = (e) => {
-      console.log('SR result, length:', e.results.length, 'isFinal:', e.results[e.results.length-1].isFinal);
-      let interim = ''; let finalText = '';
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const r = e.results[i];
-        if (r.isFinal) {
-          finalText += r[0].transcript;
-          if (finalText.trim() && ws && ws.readyState === WebSocket.OPEN) {
-            addMsg('user', finalText.trim());
-            setHint('thinking');
-            ws.send(JSON.stringify({type:'transcript',transcript:finalText.trim(),session_id:sessionId}));
-          }
-          finalText = '';
-        } else { interim += r[0].transcript; }
-      }
-      if ((finalText+interim).trim()) showCaption((finalText+interim).trim());
-      if (interim) { setHint('listening'); setWaveState('speaking'); }
-    };
-    recognition.onspeechstart = () => { setWaveState('speaking'); micLabel.textContent='说话中'; };
-    recognition.onspeechend = () => { setWaveState('active'); micLabel.textContent='监听中'; };
-    recognition.onstart = () => { setWaveState('active'); micLabel.textContent='监听中'; };
-    recognition.onend = () => { };
-    recognition.onerror = (e) => { console.log('SR error:', e.error); };
-    recognition.start();
-  } catch(e) { console.log('SR resume failed:', e); }
-}
-
 // ---- 帧发送 ----
 function sendFrame() {
   if (!ws || ws.readyState !== WebSocket.OPEN) return;
@@ -451,6 +428,7 @@ async function startMedia() {
     video:{width:640,height:480,facingMode:'user'},
     audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}
   });
+  audioTrack = stream.getAudioTracks()[0] || null;
   video.srcObject = stream;
   await video.play();
 }
@@ -459,7 +437,8 @@ function stop() {
   isRunning = false; updateButton();
   clearInterval(frameTimer); frameTimer = null;
   if (recognition) { try{recognition.stop()}catch(e){}; recognition=null; }
-  speechSynthesis.cancel(); ttsQueue=[]; ttsSpeaking=false;
+  speechSynthesis.cancel(); ttsQueue=[]; ttsSpeaking=false; ttsCooldown=false;
+  clearTimeout(ttsCooldownTimer); ttsCooldownTimer=null;
   if (stream) { stream.getTracks().forEach(t=>t.stop()); stream=null; }
   if (ws) { try{ws.close()}catch(e){}; ws=null; }
   setWaveState('idle'); micLabel.textContent='点击开始';
